@@ -15,6 +15,7 @@
 #define BUFMAX 1024
 #define PORT "8080"
 #define MAX_CLIENTS 5
+#define MAX_BLOCK 1024
 
 typedef struct Block {
     int index;
@@ -25,7 +26,7 @@ typedef struct Block {
     int nonce;
 } Block;
 
-Block block[MAX_CLIENTS];
+Block block[MAX_BLOCK];
 int block_number=0;
 
 void errProc(const char *str);
