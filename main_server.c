@@ -10,6 +10,7 @@
 #include <sys/epoll.h>
 #include <openssl/sha.h>
 #include <errno.h>
+#include <time.h>
 
 #define BUFMAX 1024
 #define PORT "8080"
@@ -89,6 +90,8 @@ void *connection_handler(void *socket_desc){
     unsigned char result[BUFMAX];
     char data[BUFMAX];
     char block_info[BUFSIZ];
+    struct timespec begin,end;
+
     
     //Receive
     while( (read_size = recv(client_sock , client_message , BUFMAX , 0)) > 0 )
@@ -100,12 +103,17 @@ void *connection_handler(void *socket_desc){
         block[block_number]=create_block(block_number,data,block[block_number-1].hash);
         block_number++; // 블록 개수 추가
 
-        // 난이도 + 전송할 블록 데이터 (수정 필요)
+        // 난이도 + 전송할 블록 데이터
         strncpy(block_info,client_message,1);
         sprintf(block_info,"%c %d %ld %s %s %s %d",client_message[0],block[block_number-1].index, block[block_number-1].timestamp, block[block_number-1].data, block[block_number-1].prev_hash,block[block_number-1].hash, block[block_number-1].nonce);
 
         // 워킹서버에 데이터 전송 및 데이터 받기
+        clock_gettime(CLOCK_MONOTONIC, &begin);; // 타이머 시작
         communicate_working_server(block_info,result);
+        clock_gettime(CLOCK_MONOTONIC, &end); // 타이머 종료
+
+        // 시간 출력
+        printf("%f seconds\n", (end.tv_sec - begin.tv_sec) + (end.tv_nsec - begin.tv_nsec) / 1000000000.0);
 
         //클라이언트에게 데이터 전송
         write(client_sock , result , strlen(client_message));

@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
-#include <time.h>
+
 
 #define BUFMAX 1024
 
@@ -23,7 +23,6 @@ int main(void){
     char buff[BUFMAX];
     struct sockaddr_in destAddr;
     socklen_t addrLen;
-    struct timespec begin,end;
 
     // 사용자 입력
     printf("ID or name : ");
@@ -53,16 +52,11 @@ int main(void){
     }
 
 	// 암호화된 값과 난이도를 서버에 전송
-    clock_gettime(CLOCK_MONOTONIC, &begin);; // 타이머 시작
     send(client_socket, buff, readLen - 1, 0);
     
     readLen=recv(client_socket,buff,BUFMAX,0);
     buff[readLen]='\0';
     printf("%s\n",buff);
-    clock_gettime(CLOCK_MONOTONIC, &end); // 타이머 종료
-
-    // 시간 출력
-    printf("%f seconds\n", (end.tv_sec - begin.tv_sec) + (end.tv_nsec - begin.tv_nsec) / 1000000000.0);
 
     close(client_socket);
     return 0;
