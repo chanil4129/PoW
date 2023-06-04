@@ -68,8 +68,12 @@ int main(int argc, char** argv)
         nRecv=recv(clntSd,buff,sizeof(buff)-1,0);
         buff[nRecv]='\0';
 
-        get_nonce(buff,result);
-
+		if(strcmp(buff,"O")){
+			strcpy(result,"O");
+		}
+		else{
+			get_nonce(buff,result);
+		}
         send(clntSd,result,strlen(result),0);
 		
 		printf("Clent(%d): is disconnected\n",ntohs(destAddr.sin_port));
