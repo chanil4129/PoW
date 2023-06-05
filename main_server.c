@@ -25,7 +25,7 @@ typedef struct Block {
     char data[BUFMAX];
     unsigned char prev_hash[SHA256_DIGEST_LENGTH+1];
     unsigned char hash[SHA256_DIGEST_LENGTH+1];
-    int nonce;
+    long long nonce;
 } Block;
 
 Block block[MAX_BLOCK];
@@ -127,13 +127,13 @@ void *connection_handler(void *socket_desc){
 
         // 난이도 + 전송할 블록 데이터
         strncpy(block_info,client_message,1);
-        snprintf(block_info,sizeof(block_info),"%c %d %ld %s %s %s %d",client_message[0],block[block_number-1].index, block[block_number-1].timestamp, block[block_number-1].data, block[block_number-1].prev_hash,block[block_number-1].hash, block[block_number-1].nonce);
+        snprintf(block_info,sizeof(block_info),"%c %d %ld %s %s %s %lld",client_message[0],block[block_number-1].index, block[block_number-1].timestamp, block[block_number-1].data, block[block_number-1].prev_hash,block[block_number-1].hash, block[block_number-1].nonce);
 
         binaryToHexStr(block[block_number-1].prev_hash, prev_hash_str_buff, SHA256_DIGEST_LENGTH);
         binaryToHexStr(block[block_number-1].hash, hash_str_buff, SHA256_DIGEST_LENGTH);
 
         //DEBUG
-        // printf("%c\n%d\n%ld\n%s\n%s\n%s\n%d",client_message[0],block[block_number-1].index, block[block_number-1].timestamp, block[block_number-1].data, prev_hash_str_buff,hash_str_buff, block[block_number-1].nonce);
+        // printf("%c\n%d\n%ld\n%s\n%s\n%s\n%lld",client_message[0],block[block_number-1].index, block[block_number-1].timestamp, block[block_number-1].data, prev_hash_str_buff,hash_str_buff, block[block_number-1].nonce);
         // printf("%s\n",block_info);
 
         // working서버에 데이터 전송 및 데이터 받기
@@ -150,7 +150,7 @@ void *connection_handler(void *socket_desc){
         clock_gettime(CLOCK_MONOTONIC, &end); // 타이머 종료
 
         // nonce값 넣기
-        block->nonce=atoi(pow_nonce);
+        block->nonce=atoll(pow_nonce);
 
         // 시간 출력
         runtime=(end.tv_sec - begin.tv_sec) + (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
@@ -170,10 +170,10 @@ void *connection_handler(void *socket_desc){
             printf("%02x",block[block_number-1].hash[i]);
         }
         printf("\n");
-        printf("nonce : %d\n",block[block_number-1].nonce);
+        printf("nonce : %lld\n",block[block_number-1].nonce);
         printf("\n");
 
-        snprintf(block_info,sizeof(block_info),"%f %d %ld %s %s %s %d",runtime,block[block_number-1].index,block[block_number-1].timestamp,block[block_number-1].data,prev_hash_str_buff,hash_str_buff,block[block_number-1].nonce);
+        snprintf(block_info,sizeof(block_info),"%f %d %ld %s %s %s %lld",runtime,block[block_number-1].index,block[block_number-1].timestamp,block[block_number-1].data,prev_hash_str_buff,hash_str_buff,block[block_number-1].nonce);
 
         //클라이언트에게 데이터 전송
         write(client_sock , block_info , strlen(block_info));
@@ -200,7 +200,7 @@ Block create_block(int index, const char *data, const unsigned char *prev_hash) 
     strncpy(block.prev_hash, prev_hash, sizeof(block.prev_hash));
     block.nonce = 0;
     char block_string[BUFSIZ];
-    snprintf(block_string,sizeof(block_string), "%d%ld%s%s%d", block.index, block.timestamp, block.data, block.prev_hash, block.nonce);
+    snprintf(block_string,sizeof(block_string), "%d%ld%s%s%lld", block.index, block.timestamp, block.data, block.prev_hash, block.nonce);
     getHash(block_string, block.hash);
     return block;
 }
@@ -293,14 +293,13 @@ void *working_server_data_exchange_thread(void *arg){
 
     snprintf(send_data,sizeof(send_data),"%s %s %s %s %s %s %s",thread_info_argv[1],thread_info_argv[2],thread_info_argv[3],thread_info_argv[4],thread_info_argv[5],thread_info_argv[6],thread_info_argv[7]);
     //DEBUG
-    printf("send_data : %s",send_data);
+    // printf("send_data : %s",send_data);
 
-    while(1){
-        send(sockfd, send_data, strlen(send_data), 0);
+    send(sockfd, send_data, strlen(send_data), 0);
 
-        int recv_len = recv(sockfd, pow_result, BUFMAX, 0);
-        pow_result[recv_len] = '\0';
-    }
+    int recv_len = recv(sockfd, pow_result, BUFMAX, 0);
+    pow_result[recv_len] = '\0';
+    
 
     close(sockfd);
     pthread_exit((void*)pow_result);
@@ -331,7 +330,7 @@ int communicate_working_server(unsigned char *send_data, unsigned char *recv_dat
             sprintf(thread_info,"%d %s",working_number,send_data);
 
             //DEBUG
-            printf("thread_info : %s\n",thread_info);
+            // printf("thread_info : %s\n",thread_info);
 
             if(pthread_create(&data_exchange_thread, NULL, working_server_data_exchange_thread, &thread_info) < 0){
                 perror("could not create thread");

@@ -18,7 +18,7 @@ typedef struct Block {
     char data[BUFMAX];
     unsigned char prev_hash[SHA256_DIGEST_LENGTH+1];
     unsigned char hash[SHA256_DIGEST_LENGTH+1];
-    int nonce;
+    long long nonce;
 } Block;
 
 void errProc(const char*);
@@ -73,7 +73,7 @@ int main(int argc, char** argv)
         buff[nRecv]='\0';
 
 		//DEBUG
-		printf("recieve buff : %s\n",buff);
+		// printf("recieve buff : %s\n",buff);
 
 		if(!strcmp(buff,"O")){
 			strcpy(result,"O");
@@ -114,7 +114,7 @@ void get_nonce(unsigned char *send_data,unsigned char *recv_data){
 
     proof_of_work(&block,difficulty);
 
-    sprintf(recv_data,"%d",block.nonce);
+    sprintf(recv_data,"%lld",block.nonce);
 }
 
 void hexStrToBinary(const char *str, unsigned char *binary, int len) {
@@ -123,16 +123,25 @@ void hexStrToBinary(const char *str, unsigned char *binary, int len) {
     }
 }
 
+void binaryToHexStr(const unsigned char *binary, char *str, int len) {
+    for(int i = 0; i < len; i++) {
+        sprintf(str + (i * 2), "%02x", binary[i]);
+    }
+}
+
 // 작업증명
 void proof_of_work(Block *block, int difficulty) {
     char target[64] = {0};
+	char prev_hash_str_buff[SHA256_DIGEST_LENGTH*2+1];
+
     for (int i = 0; i < difficulty; i++) {
         target[i] = '0';
     }
     while (strncmp(block->hash, target, difficulty) != 0) {
         block->nonce++;
-        char block_string[1024];
-        sprintf(block_string, "%d%ld%s%s%d", block->index, block->timestamp, block->data, block->prev_hash, block->nonce);
+        char block_string[BUFSIZ];
+		binaryToHexStr(block->prev_hash, prev_hash_str_buff, SHA256_DIGEST_LENGTH);
+        snprintf(block_string,sizeof(block_string), "%d%ld%s%s%lld", block->index, block->timestamp, block->data, prev_hash_str_buff, block->nonce);
         getHash(block_string, block->hash);
     }
 }

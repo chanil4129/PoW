@@ -80,13 +80,14 @@ int main(void){
     printf("data : %s\n",block_argv[3] );
     printf("prev_hash : ");
     for(int i=0;i<SHA256_DIGEST_LENGTH;i++){
-        printf("%02x",prev_hash);
+        printf("%02x",prev_hash[i]);
     }
     printf("\n");
     printf("hash : ");
     for(int i=0;i<SHA256_DIGEST_LENGTH;i++){
-        printf("%02x",prev_hash[i]);
+        printf("%02x",hash[i]);
     }
+    printf("\n");
     printf("nonce : %s\n",block_argv[6]);
     printf("\n");
 
