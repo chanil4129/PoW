@@ -15,9 +15,9 @@
 typedef struct Block {
     int index;
     long timestamp;
-    char data[256];
-    unsigned char prev_hash[64];
-    unsigned char hash[64];
+    char data[BUFMAX];
+    unsigned char prev_hash[SHA256_DIGEST_LENGTH+1];
+    unsigned char hash[SHA256_DIGEST_LENGTH+1];
     int nonce;
 } Block;
 
@@ -26,6 +26,7 @@ void get_nonce(unsigned char *, unsigned char *);
 void proof_of_work(Block *block, int difficulty);
 void getHash(char *input,unsigned char *output);
 int tokenize(char *input, char *argv[]);
+void hexStrToBinary(const char *str, unsigned char *binary, int len);
 
 int main(int argc, char** argv)
 {
@@ -66,9 +67,15 @@ int main(int argc, char** argv)
 		printf("client %s:%d is connected...\n",inet_ntoa(destAddr.sin_addr),ntohs(destAddr.sin_port));
 		// 클라이언트 request 처리 후, response 보내기
         nRecv=recv(clntSd,buff,sizeof(buff)-1,0);
+		if(nRecv<0){
+			errProc("recieve");
+		}
         buff[nRecv]='\0';
 
-		if(strcmp(buff,"O")){
+		//DEBUG
+		printf("recieve buff : %s\n",buff);
+
+		if(!strcmp(buff,"O")){
 			strcpy(result,"O");
 		}
 		else{
@@ -101,13 +108,19 @@ void get_nonce(unsigned char *send_data,unsigned char *recv_data){
     block.index=atoi(send_data_argv[1]);
     block.timestamp=atol(send_data_argv[2]);
     strcpy(block.data,send_data_argv[3]);
-    strcpy(block.hash,send_data_argv[4]);
-    strcpy(block.hash,send_data_argv[5]);
+	hexStrToBinary(send_data_argv[4], block.prev_hash, SHA256_DIGEST_LENGTH);
+	hexStrToBinary(send_data_argv[5], block.hash, SHA256_DIGEST_LENGTH);
     block.nonce=atoi(send_data_argv[6]);
 
     proof_of_work(&block,difficulty);
 
     sprintf(recv_data,"%d",block.nonce);
+}
+
+void hexStrToBinary(const char *str, unsigned char *binary, int len) {
+    for(int i = 0; i < len; i++) {
+        sscanf(str + (i * 2), "%02hhx", &binary[i]);
+    }
 }
 
 // 작업증명
