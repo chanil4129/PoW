@@ -110,7 +110,7 @@ void get_nonce(unsigned char *send_data,unsigned char *recv_data){
     strcpy(block.data,send_data_argv[3]);
 	hexStrToBinary(send_data_argv[4], block.prev_hash, SHA256_DIGEST_LENGTH);
 	hexStrToBinary(send_data_argv[5], block.hash, SHA256_DIGEST_LENGTH);
-    block.nonce=atoi(send_data_argv[6]);
+    block.nonce=atoll(send_data_argv[6]);
 
     proof_of_work(&block,difficulty);
 
