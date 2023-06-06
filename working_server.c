@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <openssl/sha.h>
+#include <pthread.h>
 
 #define BUFMAX 1024
 
@@ -18,8 +19,11 @@ typedef struct Block {
     char data[BUFMAX];
     unsigned char prev_hash[SHA256_DIGEST_LENGTH+1];
     unsigned char hash[SHA256_DIGEST_LENGTH+1];
-    long long nonce;
+    unsigned long long nonce;
 } Block;
+pthread_t canceled_thread;
+pthread_mutex_t lock;
+int threading=0;
 
 void errProc(const char*);
 void get_nonce(unsigned char *, unsigned char *);
@@ -27,16 +31,24 @@ void proof_of_work(Block *block, int difficulty);
 void getHash(char *input,unsigned char *output);
 int tokenize(char *input, char *argv[]);
 void hexStrToBinary(const char *str, unsigned char *binary, int len);
+void *connection_handler(void *socket_desc);
 
 int main(int argc, char** argv)
 {
-	int mySock,readLen, nRecv, res;
+	int mySock,readLen, res;
 	int clntSd;
 	unsigned char buff[BUFSIZ];
     unsigned char result[BUFSIZ];
 	char * strAddr;
 	struct sockaddr_in srcAddr, destAddr;
 	socklen_t addrLen;
+	pthread_t thread_id;
+
+	// mutex 초기화
+    if(pthread_mutex_init(&lock, NULL) != 0) {
+        printf("mutex init failed\n");
+        exit(1);
+    }
 
 	if(argc != 2) {
 		fprintf(stderr,"Usage: %s Port",argv[0]);
@@ -58,36 +70,85 @@ int main(int argc, char** argv)
 	if(listen(mySock,5)<0) errProc("listen");
 	addrLen = sizeof(destAddr);
 	// 클라이언트 요청 accept
-	while(1)
-	{
+	while(1){
 		clntSd=accept(mySock,(struct sockaddr *)&destAddr,&addrLen);
 		if(clntSd==-1){
 			errProc("accept");
 		}
 		printf("client %s:%d is connected...\n",inet_ntoa(destAddr.sin_addr),ntohs(destAddr.sin_port));
-		// 클라이언트 request 처리 후, response 보내기
-        nRecv=recv(clntSd,buff,sizeof(buff)-1,0);
-		if(nRecv<0){
+
+		int *new_sock;
+		new_sock=malloc(sizeof(int));
+		*new_sock=clntSd;
+
+		if( pthread_create( &thread_id , NULL ,  connection_handler , (void*) new_sock) < 0){
+            errProc("could not create thread");
+        }
+
+	}
+
+    if(clntSd<0){
+		errProc("accept failed");
+	}	
+	pthread_mutex_destroy(&lock);
+	return 0;
+}
+
+void *connection_handler(void *socket_desc){
+	int client_sock = *(int*)socket_desc;
+    int read_size;
+	char result[BUFSIZ];
+    unsigned char client_message[BUFSIZ];
+        
+    //Receive
+    while( (read_size = recv(client_sock , client_message , BUFMAX , 0)) > 0 ){
+        // 클라이언트 request 처리 후, response 보내기
+		if(read_size<0){
 			errProc("recieve");
 		}
-        buff[nRecv]='\0';
+        client_message[read_size]='\0';
 
 		//DEBUG
-		// printf("recieve buff : %s\n",buff);
+		// printf("client_message : %s\n",client_message);
+		if(!strcmp(client_message,"O")){
+			printf("message O\n");
+		}
 
-		if(!strcmp(buff,"O")){
+		if(!strcmp(client_message,"O")&&threading){
+			//DEBUG
+			printf("END\n");
+			if(pthread_cancel(canceled_thread)!=0){
+				errProc("thread_cancel");
+				exit(1);
+			}
 			strcpy(result,"O");
 		}
-		else{
-			get_nonce(buff,result);
+		else if(!threading){
+			pthread_mutex_lock(&lock);
+			threading=1;
+			canceled_thread=pthread_self();
+			pthread_mutex_unlock(&lock);
+			printf("canceled_thread :%ld\n",canceled_thread);
+			get_nonce(client_message,result);
+			printf("finish\n");
 		}
-        send(clntSd,result,strlen(result),0);
-		
-		printf("Clent(%d): is disconnected\n",ntohs(destAddr.sin_port));
-		close(clntSd);
-	}
-    close(mySock);	
-	return 0;
+        send(client_sock,result,strlen(result),0);
+    }
+     
+    if(read_size == 0){
+        puts("Client disconnected");
+        fflush(stdout);
+    } 
+	else if(read_size == -1){
+        errProc("recv");
+    }
+         
+    free(socket_desc);
+	pthread_mutex_lock(&lock);
+	threading=0;
+	pthread_mutex_unlock(&lock);
+     
+    return 0;
 }
 
 void get_nonce(unsigned char *send_data,unsigned char *recv_data){
@@ -96,6 +157,9 @@ void get_nonce(unsigned char *send_data,unsigned char *recv_data){
     int block_index;
     int send_data_argc;
     char *send_data_argv[7];
+
+	//DEBUG
+	// printf("%s\n",send_data);
     
     send_data_argc=tokenize(send_data,send_data_argv);
 
@@ -115,6 +179,7 @@ void get_nonce(unsigned char *send_data,unsigned char *recv_data){
     proof_of_work(&block,difficulty);
 
     sprintf(recv_data,"%lld",block.nonce);
+	printf("powEND\n");
 }
 
 void hexStrToBinary(const char *str, unsigned char *binary, int len) {
@@ -131,24 +196,37 @@ void binaryToHexStr(const unsigned char *binary, char *str, int len) {
 
 // 작업증명
 void proof_of_work(Block *block, int difficulty) {
-    char target[64] = {0};
-	char prev_hash_str_buff[SHA256_DIGEST_LENGTH*2+1];
+    char hash_str_buff[SHA256_DIGEST_LENGTH*2+1];
+    char prev_hash_str_buff[SHA256_DIGEST_LENGTH*2+1];
+    char target[difficulty + 1];
 
-    for (int i = 0; i < difficulty; i++) {
+    for(int i = 0; i < difficulty; i++) {
         target[i] = '0';
     }
-    while (strncmp(block->hash, target, difficulty) != 0) {
+    target[difficulty] = '\0'; // null-terminate the target string
+
+    do {
+		//DEBUG
+		// for(int i=0;i<SHA256_DIGEST_LENGTH;i++){
+        //     printf("%02x",block->hash[i]);
+        // }
+        // printf("\n");
+
         block->nonce++;
         char block_string[BUFSIZ];
-		binaryToHexStr(block->prev_hash, prev_hash_str_buff, SHA256_DIGEST_LENGTH);
-        snprintf(block_string,sizeof(block_string), "%d%ld%s%s%lld", block->index, block->timestamp, block->data, prev_hash_str_buff, block->nonce);
+        binaryToHexStr(block->prev_hash, prev_hash_str_buff, SHA256_DIGEST_LENGTH);
+        snprintf(block_string, sizeof(block_string), "%d%ld%s%s%lld", block->index, block->timestamp, block->data, prev_hash_str_buff, block->nonce);
         getHash(block_string, block->hash);
-    }
+        binaryToHexStr(block->hash, hash_str_buff, SHA256_DIGEST_LENGTH);
+
+    } while(strncmp(hash_str_buff, target, difficulty) != 0);
+	//DEBUG
+	printf("nonce : %lld\n",block->nonce);
 }
 
 void getHash(char *input,unsigned char *output){
     //입력 데이터의 길이
-    size_t input_len=sizeof(input)-1;
+    size_t input_len=strlen(input);
 
     //SHA256 해시 계산
     SHA256(input,input_len,output);
