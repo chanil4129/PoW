@@ -24,7 +24,6 @@ typedef struct Block {
 pthread_t canceled_thread;
 pthread_mutex_t lock;
 int threading=0;
-unsigned long long STARTNONCE=0;
 
 void errProc(const char*);
 void get_nonce(unsigned char *, unsigned char *);
@@ -123,12 +122,8 @@ void *connection_handler(void *socket_desc){
 				exit(1);
 			}
 			strcpy(result,"O");
-			pthread_mutex_lock(&lock);
-			threading=0;
-			pthread_mutex_unlock(&lock);
 		}
 		else if(!threading){
-			printf("conneeeeeeet\n");
 			pthread_mutex_lock(&lock);
 			threading=1;
 			canceled_thread=pthread_self();
@@ -168,11 +163,6 @@ void get_nonce(unsigned char *send_data,unsigned char *recv_data){
     
     send_data_argc=tokenize(send_data,send_data_argv);
 
-	//DEBUG
-	printf("difficulty : %s\n",send_data_argv[0]);
-	printf("index : %s\n",send_data_argv[1]);
-	printf("timestamp : %s\n",send_data_argv[2]);
-
     if(send_data_argc!=7){
         errProc("data leak");
     }
@@ -188,7 +178,7 @@ void get_nonce(unsigned char *send_data,unsigned char *recv_data){
 
     proof_of_work(&block,difficulty);
 
-    sprintf(recv_data,"%llu",block.nonce);
+    sprintf(recv_data,"%lld",block.nonce);
 	printf("powEND\n");
 }
 
@@ -210,12 +200,10 @@ void proof_of_work(Block *block, int difficulty) {
     char prev_hash_str_buff[SHA256_DIGEST_LENGTH*2+1];
     char target[difficulty + 1];
 
-    for(int i = 0; i < difficulty; i++) {
+    for(int i = 0; i < 5; i++) {
         target[i] = '0';
     }
-    target[difficulty] = '\0'; // null-terminate the target string
-
-	block->nonce=STARTNONCE;
+    target[5] = '\0'; // null-terminate the target string
 
     do {
 		//DEBUG
@@ -223,18 +211,17 @@ void proof_of_work(Block *block, int difficulty) {
         //     printf("%02x",block->hash[i]);
         // }
         // printf("\n");
-		// printf("%llu\n",block->nonce);
 
         block->nonce++;
         char block_string[BUFSIZ];
         binaryToHexStr(block->prev_hash, prev_hash_str_buff, SHA256_DIGEST_LENGTH);
-        snprintf(block_string, sizeof(block_string), "%d%ld%s%s%llu", block->index, block->timestamp, block->data, prev_hash_str_buff, block->nonce);
+        snprintf(block_string, sizeof(block_string), "%d%ld%s%s%lld", block->index, block->timestamp, block->data, prev_hash_str_buff, block->nonce);
         getHash(block_string, block->hash);
         binaryToHexStr(block->hash, hash_str_buff, SHA256_DIGEST_LENGTH);
 
-    } while(strncmp(hash_str_buff, target, difficulty) != 0);
+    } while(strncmp(hash_str_buff, target, 5) != 0);
 	//DEBUG
-	printf("nonce : %llu\n",block->nonce);
+	printf("nonce : %lld\n",block->nonce);
 }
 
 void getHash(char *input,unsigned char *output){

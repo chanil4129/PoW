@@ -24,7 +24,8 @@ typedef struct Block {
 pthread_t canceled_thread;
 pthread_mutex_t lock;
 int threading=0;
-unsigned long long STARTNONCE=0;
+unsigned long long STARTNONCE=6148914691236517205;
+
 
 void errProc(const char*);
 void get_nonce(unsigned char *, unsigned char *);
@@ -128,7 +129,6 @@ void *connection_handler(void *socket_desc){
 			pthread_mutex_unlock(&lock);
 		}
 		else if(!threading){
-			printf("conneeeeeeet\n");
 			pthread_mutex_lock(&lock);
 			threading=1;
 			canceled_thread=pthread_self();
@@ -162,9 +162,6 @@ void get_nonce(unsigned char *send_data,unsigned char *recv_data){
     int block_index;
     int send_data_argc;
     char *send_data_argv[7];
-
-	//DEBUG
-	// printf("%s\n",send_data);
     
     send_data_argc=tokenize(send_data,send_data_argv);
 
@@ -223,7 +220,6 @@ void proof_of_work(Block *block, int difficulty) {
         //     printf("%02x",block->hash[i]);
         // }
         // printf("\n");
-		// printf("%llu\n",block->nonce);
 
         block->nonce++;
         char block_string[BUFSIZ];

@@ -16,8 +16,7 @@
 #define MAIN_SERVER_PORT 8080
 #define MAX_CLIENTS 5
 #define MAX_BLOCK 1024
-#define WORKING_SERVER_MAX 2
-#define WORKING_SERVER_PORT 8081
+#define WORKING_SERVER_MAX 3
 
 typedef struct Block {
     int index;
@@ -30,7 +29,8 @@ typedef struct Block {
 
 Block block[MAX_BLOCK];
 int block_number=0;
-char *working_server_ip[]={"127.0.0.1","127.0.0.1","127.0.0.1","127.0.0.1","127.0.0.1"}; // 변경 필요
+char *working_server_ip[]={"127.0.0.1","203.253.25.13","203.253.25.17"}; // 변경 필요
+int working_server_port[]={8081,8082,8083};
 int thread_finished=0;
 pthread_t data_exchange_thread[WORKING_SERVER_MAX];
 int cancel_thread_num;
@@ -206,9 +206,9 @@ void *connection_handler(void *socket_desc){
                 printf("result : %s\n",pow_result);
                 for(int i=0;i<WORKING_SERVER_MAX;i++){
                     printf("i : %d\n",i);
-                    if(i==cancel_thread_num){
-                        continue;
-                    }
+                    // if(i==cancel_thread_num){
+                    //     continue;
+                    // }
                     //DEBUG
                     printf("cancel_thread_num : %d\n",cancel_thread_num);
                     if(pthread_cancel(data_exchange_thread[i])!=0){
@@ -246,10 +246,10 @@ void *connection_handler(void *socket_desc){
             printf("%02x",block[block_number-1].hash[i]);
         }
         printf("\n");
-        printf("nonce : %lld\n",block[block_number-1].nonce);
+        printf("nonce : %llu\n",block[block_number-1].nonce);
         printf("\n");
 
-        snprintf(block_info,sizeof(block_info),"%f %d %ld %s %s %s %lld",runtime,block[block_number-1].index,block[block_number-1].timestamp,block[block_number-1].data,prev_hash_str_buff,hash_str_buff,block[block_number-1].nonce);
+        snprintf(block_info,sizeof(block_info),"%f %d %ld %s %s %s %llu",runtime,block[block_number-1].index,block[block_number-1].timestamp,block[block_number-1].data,prev_hash_str_buff,hash_str_buff,block[block_number-1].nonce);
 
         //클라이언트에게 데이터 전송
         write(client_sock , block_info , strlen(block_info));
@@ -278,7 +278,7 @@ void create_block(int index, const char *data) {
     prev_hash_str_buff[SHA256_DIGEST_LENGTH]=0x00;
     block[index].nonce = 0;
     char block_string[BUFSIZ];
-    snprintf(block_string,sizeof(block_string), "%d%ld%s%s%lld", block[index].index, block[index].timestamp, block[index].data, prev_hash_str_buff, block[index].nonce);
+    snprintf(block_string,sizeof(block_string), "%d%ld%s%s%llu", block[index].index, block[index].timestamp, block[index].data, prev_hash_str_buff, block[index].nonce);
     getHash(block_string, block[index].hash);
 }
 
@@ -323,11 +323,11 @@ void *working_server_canceld_thread(void *arg){
     memset(&serv_addr,0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = inet_addr(working_server_ip[*working_number]);
-    serv_addr.sin_port = htons(WORKING_SERVER_PORT+*working_number);
+    serv_addr.sin_port = htons(working_server_port[*working_number]);
 
     // working 서버에 연결
     if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-        perror("connect");
+        perror("connect222");
         pthread_exit((void *)1);
     }
 
@@ -341,7 +341,7 @@ void *working_server_canceld_thread(void *arg){
     recv_buffer[recv_len] = '\0';
 
     //DEBUG
-    printf("cancel finish");
+    printf("cancel finish\n");
 
     free(working_number);
 
@@ -361,10 +361,9 @@ void *working_server_data_exchange_thread(void *arg){
 
     //DEBUG
     // printf("thread_infow2: %s\n",thread_info);
-    printf("thread_info_argc : %d\n",thread_info_argc);
-    printf("%s\n",thread_info_argv[0]);
-    printf("%s\n",thread_info_argv[1]);
-    printf("%s\n",thread_info_argv[2]);
+    printf("\nthread_info_argc : %d\n",thread_info_argc);
+    printf("working number : %s\n",thread_info_argv[0]);
+    printf("difficulty : %s\n",thread_info_argv[1]);
 
     if(thread_info_argc!=8){
         errProc("thread data transmit");
@@ -380,15 +379,15 @@ void *working_server_data_exchange_thread(void *arg){
     memset(&serv_addr,0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = inet_addr(working_server_ip[atoi(thread_info_argv[0])]);
-    serv_addr.sin_port = htons(WORKING_SERVER_PORT+atoi(thread_info_argv[0]));
+    serv_addr.sin_port = htons(working_server_port[atoi(thread_info_argv[0])]);
 
     //DEBUG
-    // printf("ip : %s\n",working_server_ip[atoi(thread_info_argv[0])]);
-    // printf("WORKING_SERVER_PORT : %d\n",WORKING_SERVER_PORT+atoi(thread_info_argv[0]));
+    printf("ip : %s\n",working_server_ip[atoi(thread_info_argv[0])]);
+    printf("WORKING_SERVER_PORT : %d\n",working_server_port[atoi(thread_info_argv[0])]);
 
     // working 서버에 연결
     if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-        perror("connect");
+        perror("connect_working..");
         pthread_exit((void *)1);
     }
 
@@ -414,7 +413,9 @@ void *working_server_data_exchange_thread(void *arg){
     // printf("in_thread_finished : %d\n",thread_finished);
     //DEBUG
     // printf("in_thread_cancel_thread_num : %d\n",cancel_thread_num);
-    pthread_exit((void*)pow_result);
+    while(1){
+
+    }
 }
 
 void communicate_working_server(int working_number){

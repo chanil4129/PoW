@@ -24,7 +24,7 @@ typedef struct Block {
 pthread_t canceled_thread;
 pthread_mutex_t lock;
 int threading=0;
-unsigned long long STARTNONCE=0;
+unsigned long long STARTNONCE=6148914691236517205;
 
 void errProc(const char*);
 void get_nonce(unsigned char *, unsigned char *);
@@ -128,7 +128,6 @@ void *connection_handler(void *socket_desc){
 			pthread_mutex_unlock(&lock);
 		}
 		else if(!threading){
-			printf("conneeeeeeet\n");
 			pthread_mutex_lock(&lock);
 			threading=1;
 			canceled_thread=pthread_self();
@@ -215,7 +214,7 @@ void proof_of_work(Block *block, int difficulty) {
     }
     target[difficulty] = '\0'; // null-terminate the target string
 
-	block->nonce=STARTNONCE;
+	block->nonce=STARTNONCE*2;
 
     do {
 		//DEBUG
@@ -223,7 +222,6 @@ void proof_of_work(Block *block, int difficulty) {
         //     printf("%02x",block->hash[i]);
         // }
         // printf("\n");
-		// printf("%llu\n",block->nonce);
 
         block->nonce++;
         char block_string[BUFSIZ];
