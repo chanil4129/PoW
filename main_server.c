@@ -24,7 +24,7 @@ typedef struct Block {
     char data[BUFMAX];
     unsigned char prev_hash[SHA256_DIGEST_LENGTH+1];
     unsigned char hash[SHA256_DIGEST_LENGTH+1];
-    unsigned long long nonce;
+    char nonce[100];
 } Block;
 
 Block block[MAX_BLOCK];
@@ -44,12 +44,13 @@ void errProc(const char *str);
 void *connection_handler(void *socket_desc);
 void communicate_working_server(int working_number);
 void canceled_working_server(int working_number);
-void create_block(int index, const char *data);
+void block_init(int index, const char *data);
 void getHash(char *input,unsigned char *output);
 void *working_server_canceld_thread(void *arg);
 void *working_server_data_exchange_thread(void *arg);
 int tokenize(char *input, char *argv[]);
 void binaryToHexStr(const unsigned char *binary, char *str, int len);
+void hexStrToBinary(const char *str, unsigned char *binary, int len);
 
 int main(void){
     int server_sock, client_sock, c;
@@ -64,7 +65,7 @@ int main(void){
         block[0].prev_hash[i]=0x00;
         block[0].hash[i]=0x00;
     }
-    block[0].nonce=0;
+    strcpy(block[0].nonce,"0");
     block_number++;
 
     // mutex 초기화
@@ -96,10 +97,9 @@ int main(void){
     listen(server_sock , MAX_CLIENTS);
      
     //Accept
-    puts("Waiting for incoming connections...");
+    puts("Waiting for incoming connections...\n");
     c = sizeof(struct sockaddr_in);
     while( (client_sock = accept(server_sock, (struct sockaddr *)&client, (socklen_t*)&c)) ){
-        puts("Connection accepted");
          
         int *new_sock;
         new_sock = malloc(sizeof(int));
@@ -109,7 +109,6 @@ int main(void){
             errProc("could not create thread");
         }
          
-        puts("Handler assigned");
     }
      
     if (client_sock < 0){
@@ -125,7 +124,7 @@ void *connection_handler(void *socket_desc){
     int client_sock = *(int*)socket_desc;
     int read_size;
     unsigned char client_message[BUFMAX];
-    unsigned char pow_nonce[BUFMAX];
+    unsigned char working_recv_buff[BUFMAX];
     char data[BUFMAX];
     unsigned char block_info[BUFSIZ];
     struct timespec begin,end;
@@ -133,64 +132,33 @@ void *connection_handler(void *socket_desc){
     double runtime;
     char prev_hash_str_buff[SHA256_DIGEST_LENGTH*2+1];
     char hash_str_buff[SHA256_DIGEST_LENGTH*2+1];
-
-    //DEBUG
-    // int send_data_argc;
-    // char *send_data_argv[7];
+    int working_data_argc;
+    char *working_data_argv[2];
         
     //Receive
     while( (read_size = recv(client_sock , client_message , BUFMAX , 0)) > 0 ){
-        //DEBUG
-        printf("client_message: %s\n",client_message);
-
         // 받은 데이터의 data만 추출
         strncpy(data,client_message+1,strlen(client_message)-1);
 
+        //client message
+        printf("(Client data)\n");
+        printf("ID or name : %s\n",data);
+        printf("difficulty : %c\n\n",client_message[0]);
+
         // 블록 생성
-        create_block(block_number,data);
+        block_init(block_number,data);
         block_number++; // 블록 개수 추가
 
         binaryToHexStr(block[block_number-1].prev_hash, prev_hash_str_buff, SHA256_DIGEST_LENGTH);
-        binaryToHexStr(block[block_number-1].hash, hash_str_buff, SHA256_DIGEST_LENGTH);
-        prev_hash_str_buff[SHA256_DIGEST_LENGTH]=0x00;
-        hash_str_buff[SHA256_DIGEST_LENGTH]=0x00;
+        prev_hash_str_buff[SHA256_DIGEST_LENGTH*2]=0x00;
 
         // 난이도 + 전송할 블록 데이터
-        snprintf(block_info,sizeof(block_info),"%c %d %ld %s %s %s %lld",client_message[0],block[block_number-1].index, block[block_number-1].timestamp, block[block_number-1].data, prev_hash_str_buff,hash_str_buff, block[block_number-1].nonce);
-        //DEBUG
-        // printf("block_info_size : %ld\n",strlen(block_info));
-        // printf("////////////\n%c\n%d\n%ld\n%s\n//////////////\n",client_message[0],block[block_number-1].index, block[block_number-1].timestamp, block[block_number-1].data);
-        // for(int i=0;i<SHA256_DIGEST_LENGTH;i++){
-        //     printf("%02x",block[block_number-1].prev_hash[i]);
-        // }
-        // printf("\n");
-        // for(int i=0;i<SHA256_DIGEST_LENGTH;i++){
-        //     printf("%02x",block[block_number-1].hash[i]);
-        // }
-        // printf("\n");
-        // printf("#############################\n");
+        snprintf(block_info,sizeof(block_info),"%c %d %ld %s %s %s",client_message[0],block[block_number-1].index, block[block_number-1].timestamp, block[block_number-1].data, prev_hash_str_buff, block[block_number-1].nonce);
 
         strcpy(to_working_server_message,block_info);
 
-        //DEBUG
-        // send_data_argc=tokenize(block_info,send_data_argv);
-        // printf("MMMMMMMMM: %d\n",send_data_argc);
-        // printf("send_data_argv : %ld\n",strlen(send_data_argv[4]));
-
-        //DEBUG
-        // printf("%c\n%d\n%ld\n%s\n%s\n%s\n%lld",client_message[0],block[block_number-1].index, block[block_number-1].timestamp, block[block_number-1].data, prev_hash_str_buff,hash_str_buff, block[block_number-1].nonce);
-        // printf("strlen(block_info) : %ld\n",strlen(block_info));
-
-        // //DEBUG
-        // for(int i=0;i<SHA256_DIGEST_LENGTH;i++){
-        //     printf("%02x",block[1].hash[i]);
-        // }
-        // printf("\n");
-
         // working서버에 데이터 전송 및 데이터 받기
         thread_finished=0;
-        //DEBUG
-        printf("thread_finished : %d\n",thread_finished);
         clock_gettime(CLOCK_MONOTONIC, &begin); // 타이머 시작
         for(int i=0;i<WORKING_SERVER_MAX;i++){
             communicate_working_server(i);
@@ -199,18 +167,8 @@ void *connection_handler(void *socket_desc){
         while(1){
             pthread_mutex_lock(&lock);
             if(thread_finished){
-                //DEBUG
-                printf("working_server_END\n");
-                strcpy(pow_nonce,pow_result);
-                //DEBUG
-                printf("result : %s\n",pow_result);
+                strcpy(working_recv_buff,pow_result);
                 for(int i=0;i<WORKING_SERVER_MAX;i++){
-                    printf("i : %d\n",i);
-                    // if(i==cancel_thread_num){
-                    //     continue;
-                    // }
-                    //DEBUG
-                    printf("cancel_thread_num : %d\n",cancel_thread_num);
                     if(pthread_cancel(data_exchange_thread[i])!=0){
                         errProc("thread_cancel");
                         exit(1);
@@ -225,15 +183,26 @@ void *connection_handler(void *socket_desc){
 
         clock_gettime(CLOCK_MONOTONIC, &end); // 타이머 종료
 
-        // nonce값 넣기
-        block[block_number-1].nonce=atoll(pow_nonce);
+        //working_server 데이터 받기
+        working_data_argc=tokenize(working_recv_buff,working_data_argv);
+
+        if(working_data_argc!=2){
+            errProc("data leak");
+        }
+
+        // nonce값 update
+        sscanf(working_data_argv[0],"%s",block[block_number-1].nonce);
+
+        // hash값 update
+        hexStrToBinary(working_data_argv[1],block[block_number-1].hash,SHA256_DIGEST_LENGTH);
 
         // 시간 출력
         runtime=(end.tv_sec - begin.tv_sec) + (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
+        printf("(result)\n");
         printf("pow run time : %f seconds\n", runtime);
 
         // 블록 정보 출력
-        printf("index : %d\n",block[block_number-1].index);
+        printf("block_number : %d\n",block[block_number-1].index);
         printf("timestamp : %ld\n",block[block_number-1].timestamp);
         printf("data : %s\n", block[block_number-1].data);
         printf("prev_hash : ");
@@ -246,17 +215,20 @@ void *connection_handler(void *socket_desc){
             printf("%02x",block[block_number-1].hash[i]);
         }
         printf("\n");
-        printf("nonce : %llu\n",block[block_number-1].nonce);
-        printf("\n");
+        printf("nonce : %s\n",block[block_number-1].nonce);
 
-        snprintf(block_info,sizeof(block_info),"%f %d %ld %s %s %s %llu",runtime,block[block_number-1].index,block[block_number-1].timestamp,block[block_number-1].data,prev_hash_str_buff,hash_str_buff,block[block_number-1].nonce);
+        // block_info update
+        binaryToHexStr(block[block_number-1].hash, hash_str_buff, SHA256_DIGEST_LENGTH);
+        hash_str_buff[SHA256_DIGEST_LENGTH*2]=0x00;
+
+        snprintf(block_info,sizeof(block_info),"%f %d %ld %s %s %s %s",runtime,block[block_number-1].index,block[block_number-1].timestamp,block[block_number-1].data,prev_hash_str_buff,hash_str_buff,block[block_number-1].nonce);
 
         //클라이언트에게 데이터 전송
         write(client_sock , block_info , strlen(block_info));
     }
      
     if(read_size == 0){
-        puts("Client disconnected");
+        puts("Client disconnected\n\n");
         fflush(stdout);
     } else if(read_size == -1){
         errProc("recv");
@@ -268,18 +240,16 @@ void *connection_handler(void *socket_desc){
 }
 
 // 블록 생성
-void create_block(int index, const char *data) {
+void block_init(int index, const char *data) {
     char prev_hash_str_buff[SHA256_DIGEST_LENGTH*2+1];
 
     block[index].index = index;
     block[index].timestamp = time(NULL);
     strncpy(block[index].data, data, sizeof(block[index].data));
-    binaryToHexStr(block[index-1].hash, prev_hash_str_buff, SHA256_DIGEST_LENGTH);
-    prev_hash_str_buff[SHA256_DIGEST_LENGTH]=0x00;
-    block[index].nonce = 0;
-    char block_string[BUFSIZ];
-    snprintf(block_string,sizeof(block_string), "%d%ld%s%s%llu", block[index].index, block[index].timestamp, block[index].data, prev_hash_str_buff, block[index].nonce);
-    getHash(block_string, block[index].hash);
+    for(int i=0;i<SHA256_DIGEST_LENGTH+1;i++){
+        block[index].prev_hash[i]=block[index-1].hash[i];
+    }
+    strcpy(block[index].nonce,"0");
 }
 
 void hexStrToBinary(const char *str, unsigned char *binary, int len) {
@@ -309,10 +279,6 @@ void *working_server_canceld_thread(void *arg){
     char *send_buffer="O";
     char recv_buffer[BUFMAX];
 
-    //DEBUG
-    printf("working_number : %d\n",*working_number);
-    printf("working_server_canceld_thread\n");
-
     // 소켓 생성
     if ((sockfd = socket(PF_INET, SOCK_STREAM, 0)) < 0){
         perror("socket");
@@ -335,13 +301,8 @@ void *working_server_canceld_thread(void *arg){
     // working 서버가 일하고 있는지 확인
     send(sockfd, send_buffer, strlen(send_buffer), 0);
 
-    printf("send????\n");
-
     int recv_len = recv(sockfd, recv_buffer, BUFMAX, 0);
     recv_buffer[recv_len] = '\0';
-
-    //DEBUG
-    printf("cancel finish\n");
 
     free(working_number);
 
@@ -359,13 +320,7 @@ void *working_server_data_exchange_thread(void *arg){
     
     thread_info_argc=tokenize(thread_info,thread_info_argv);
 
-    //DEBUG
-    // printf("thread_infow2: %s\n",thread_info);
-    printf("\nthread_info_argc : %d\n",thread_info_argc);
-    printf("working number : %s\n",thread_info_argv[0]);
-    printf("difficulty : %s\n",thread_info_argv[1]);
-
-    if(thread_info_argc!=8){
+    if(thread_info_argc!=7){
         errProc("thread data transmit");
     }
 
@@ -381,27 +336,18 @@ void *working_server_data_exchange_thread(void *arg){
     serv_addr.sin_addr.s_addr = inet_addr(working_server_ip[atoi(thread_info_argv[0])]);
     serv_addr.sin_port = htons(working_server_port[atoi(thread_info_argv[0])]);
 
-    //DEBUG
-    printf("ip : %s\n",working_server_ip[atoi(thread_info_argv[0])]);
-    printf("WORKING_SERVER_PORT : %d\n",working_server_port[atoi(thread_info_argv[0])]);
-
     // working 서버에 연결
     if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
         perror("connect_working..");
         pthread_exit((void *)1);
     }
 
-    snprintf(send_data,sizeof(send_data),"%s %s %s %s %s %s %s",thread_info_argv[1],thread_info_argv[2],thread_info_argv[3],thread_info_argv[4],thread_info_argv[5],thread_info_argv[6],thread_info_argv[7]);
-    //DEBUG
-    // printf("send_data : %s",send_data);
+    snprintf(send_data,sizeof(send_data),"%s %s %s %s %s %s",thread_info_argv[1],thread_info_argv[2],thread_info_argv[3],thread_info_argv[4],thread_info_argv[5],thread_info_argv[6]);
 
     send(sockfd, send_data, strlen(send_data), 0);
 
     int recv_len = recv(sockfd, pow_result, BUFMAX, 0);
     pow_result[recv_len] = '\0';
-
-    //DEBUG
-    printf("pow_result : %s\n",pow_result);
 
     close(sockfd);
     free(thread_info);
@@ -409,10 +355,6 @@ void *working_server_data_exchange_thread(void *arg){
     cancel_thread_num=atoi(thread_info_argv[0]);
     pthread_mutex_unlock(&lock);
     thread_finished=1;
-    //DEBUG
-    // printf("in_thread_finished : %d\n",thread_finished);
-    //DEBUG
-    // printf("in_thread_cancel_thread_num : %d\n",cancel_thread_num);
     while(1){
 
     }
@@ -421,16 +363,7 @@ void *working_server_data_exchange_thread(void *arg){
 void communicate_working_server(int working_number){
     char *thread_info=malloc(BUFMAX*sizeof(char));
 
-    //DEBUG
-    // int send_data_argc;
-    // char *send_data_argv[7];
-
     sprintf(thread_info,"%d %s",working_number,to_working_server_message);
-
-    //DEBUG
-    // send_data_argc=tokenize(thread_info,send_data_argv);
-    // printf("send_data_argc : %d\n",send_data_argc);
-    // printf("*******\n%s\n%s\n%s\n********\n",send_data_argv[0],send_data_argv[1],send_data_argv[2]);
 
     if(pthread_create(&data_exchange_thread[working_number], NULL, working_server_data_exchange_thread, thread_info) < 0){
         perror("could not create thread");
@@ -443,9 +376,6 @@ void canceled_working_server(int working_number){
     pthread_t communication_thread;
     int *working_number_alloc=malloc(sizeof(int));
     *working_number_alloc=working_number;
-
-    //DEBUG
-    printf("canceled_working_server\n");
 
     if(pthread_create(&communication_thread, NULL, working_server_canceld_thread, working_number_alloc) < 0){
         perror("could not create thread");

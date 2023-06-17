@@ -24,7 +24,7 @@ int main(void){
     char data[BUFMAX];
     char difficulty[BUFMAX];
     int client_socket,readLen;
-    char buff[BUFMAX];
+    char buff[BUFSIZ];
     struct sockaddr_in destAddr;
     socklen_t addrLen;
     int block_argc;
