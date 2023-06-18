@@ -95,6 +95,7 @@ int main(void){
     return 0;
 }
 
+// 문자열을 토큰으로 분리
 int tokenize(char *input, char *argv[])
 {
 	char *ptr = NULL;

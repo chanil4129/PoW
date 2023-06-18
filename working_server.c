@@ -97,6 +97,7 @@ int main(int argc, char** argv)
 	return 0;
 }
 
+// 핸들러
 void *connection_handler(void *socket_desc){
 	int client_sock = *(int*)socket_desc;
     int read_size;
@@ -111,6 +112,7 @@ void *connection_handler(void *socket_desc){
 		}
         client_message[read_size]='\0';
 
+        // O 데이터를 받으면 이미 실행중인 스레드 종료
 		if(!strcmp(client_message,"O")){
 			printf("working stop\n");
 			if(pthread_cancel(canceled_thread)!=0){
@@ -122,6 +124,7 @@ void *connection_handler(void *socket_desc){
 			threading=0;
 			pthread_mutex_unlock(&lock);
 		}
+        // pow 실행
 		else {
 			printf("working start\n");
 			pthread_mutex_lock(&lock);
@@ -152,6 +155,7 @@ void *connection_handler(void *socket_desc){
     return 0;
 }
 
+// 전송 받은 문자열을 토큰화 하고, nonce값 구하기
 void get_nonce(unsigned char *send_data,unsigned char *recv_data){
     Block block;
     int difficulty;
@@ -233,6 +237,7 @@ void getHash(char *input,unsigned char *output){
     SHA256(input,input_len,output);
 }
 
+// 문자열을 토큰으로 분리
 int tokenize(char *input, char *argv[])
 {
 	char *ptr = NULL;
@@ -247,6 +252,7 @@ int tokenize(char *input, char *argv[])
 	return argc;
 }
 
+// 문자열을 +1씩 해주는 함수
 void nonce_plus(char *nonce) {
     int len = strlen(nonce);
     int carry = 1;

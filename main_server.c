@@ -164,6 +164,7 @@ void *connection_handler(void *socket_desc){
             communicate_working_server(i);
         }
         
+        // 스레드 관리(완료가 되면 스레드 종료 및 working 서버에 데이터 보내서 working 서버의 스레드도 종료)
         while(1){
             pthread_mutex_lock(&lock);
             if(thread_finished){
@@ -272,6 +273,7 @@ void getHash(char *input,unsigned char *output){
     SHA256(input,input_len,output);
 }
 
+// 워킹 서버의 스레드를 종료시키기 위한 핸들러
 void *working_server_canceld_thread(void *arg){
     int *working_number=(int*)arg; // 어떤 working_server를 선택하는지 정하기 위한 변수
     int sockfd;
@@ -310,6 +312,7 @@ void *working_server_canceld_thread(void *arg){
     return NULL;
 }
 
+// 워킹 서버에게 블록, 난이도 데이터를 전송하기 위한 핸들러
 void *working_server_data_exchange_thread(void *arg){
     char *thread_info=(char*)arg;
     int thread_info_argc;
@@ -360,6 +363,7 @@ void *working_server_data_exchange_thread(void *arg){
     }
 }
 
+// 워킹 서버에게 블록, 난이도 데이터를 전송하기 위한 스레드 생성
 void communicate_working_server(int working_number){
     char *thread_info=malloc(BUFMAX*sizeof(char));
 
@@ -372,6 +376,7 @@ void communicate_working_server(int working_number){
     }
 }
 
+//워킹 서버의 스레드를 종료시키기 위한 스레드 생성
 void canceled_working_server(int working_number){
     pthread_t communication_thread;
     int *working_number_alloc=malloc(sizeof(int));
@@ -383,6 +388,7 @@ void canceled_working_server(int working_number){
     }
 }
 
+// 문자열을 토큰으로 분리
 int tokenize(char *input, char *argv[])
 {
 	char *ptr = NULL;
